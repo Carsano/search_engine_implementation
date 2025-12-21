@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from sklearn.metrics.pairwise import cosine_similarity
-
+from sklearn.decomposition import TruncatedSVD
 from indexer import Indexer
 
 
@@ -22,7 +22,11 @@ class TextSearch:
         matrices: Mapping of field name to TF-IDF matrix.
         vectorizers: Mapping of field name to fitted TF-IDF vectorizer.
     """
-    def __init__(self, text_fields: Sequence[str], indexer: Indexer) -> None:
+    def __init__(
+            self,
+            text_fields: Sequence[str],
+            indexer: Indexer,
+            svd: TruncatedSVD = TruncatedSVD(n_components=16)) -> None:
         """Initialize a TextSearch instance.
 
         Args:
@@ -30,6 +34,7 @@ class TextSearch:
         """
         self.text_fields = text_fields
         self.indexer = indexer
+        self.svd = svd
 
     def _get_relevant_documents(
         self,
@@ -86,16 +91,40 @@ class TextSearch:
             Updated score array after adding per-field similarities.
         """
         for field in self.text_fields:
-            query_vectorized = (
-                self.indexer.vectorizers[field].transform([query])
-            )
-            matrice = self.indexer.matrices[field]
-            f_score = cosine_similarity(matrice, query_vectorized).flatten()
+            matrice_emb, query_emb = self._get_embeddings(query, field)
+            f_score = cosine_similarity(query_emb, matrice_emb).flatten()
 
             field_boost = boost.get(field, 1.0)
 
             score = score + field_boost * f_score
         return score
+
+    def _get_embeddings(self, query, field):
+        """
+        Get embeddings for query and document matrix using SVD transformation.
+
+        Vectorizes the input query using the appropriate field vectorizer,
+        applies SVD decomposition to the document matrix, and transforms both
+        the query and documents into the reduced embedding space.
+
+        Args:
+            query (str): The input query string to be embedded.
+            field (str): The field name indicating which vectorizer
+            and matrix to use.
+
+        Returns:
+            tuple: A tuple containing:
+                - matrice_emb (ndarray): SVD-transformed document
+                matrix embeddings.
+                - query_emb (ndarray): SVD-transformed query embedding.
+        """
+        query_vectorized = (
+                self.indexer.vectorizers[field].transform([query])
+            )
+        matrice = self.indexer.matrices[field]
+        matrice_emb = self.svd.fit_transform(matrice)
+        query_emb = self.svd.transform(query_vectorized)
+        return matrice_emb, query_emb
 
     def search(
         self,
