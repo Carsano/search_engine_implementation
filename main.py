@@ -9,6 +9,8 @@ import requests
 from text_search import TextSearch
 from indexer import Indexer
 
+from sklearn.decomposition import TruncatedSVD, NMF
+
 DEFAULT_DOCS_URL = (
     "https://raw.githubusercontent.com/"
     "alexeygrigorev/llm-rag-workshop/main/notebooks/documents.json"
@@ -17,6 +19,8 @@ DEFAULT_QUERY = None
 DEFAULT_TOP_RESULTS = 5
 DEFAULT_BOOST = {"question": 3.0}
 DEFAULT_FILTERS = {"course": "data-engineering-zoomcamp"}
+DEFAULT_DECOMPOSER = "svd"
+DECOMPOSERS = {"svd": TruncatedSVD(16), "nmf": NMF(16)}
 
 
 def _get_documents(docs_url: str) -> List[Dict[str, Any]]:
@@ -78,6 +82,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=json.dumps(DEFAULT_FILTERS),
         help="JSON object mapping field names to exact-match filters.",
     )
+    parser.add_argument(
+        "--decomposer",
+        default=DEFAULT_DECOMPOSER,
+        help="Choose between svd and nmf"
+
+    )
     return parser
 
 
@@ -93,8 +103,8 @@ def main() -> None:
     indexer.index_records()
     text_search = TextSearch(
         text_fields=['section', 'question', 'text'],
-        indexer=indexer)
-
+        indexer=indexer,
+        decomposer=DECOMPOSERS.get(args.decomposer))
     raw_results = text_search.search(
         query=args.query,
         n_results=args.top_results,

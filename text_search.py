@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, NMF
 from indexer import Indexer
 
 
@@ -26,7 +26,8 @@ class TextSearch:
             self,
             text_fields: Sequence[str],
             indexer: Indexer,
-            svd: TruncatedSVD = TruncatedSVD(n_components=16)) -> None:
+            decomposer: TruncatedSVD | NMF = TruncatedSVD(n_components=16)
+            ) -> None:
         """Initialize a TextSearch instance.
 
         Args:
@@ -34,7 +35,7 @@ class TextSearch:
         """
         self.text_fields = text_fields
         self.indexer = indexer
-        self.svd = svd
+        self.decomposer = decomposer
 
     def _get_relevant_documents(
         self,
@@ -122,8 +123,8 @@ class TextSearch:
                 self.indexer.vectorizers[field].transform([query])
             )
         matrice = self.indexer.matrices[field]
-        matrice_emb = self.svd.fit_transform(matrice)
-        query_emb = self.svd.transform(query_vectorized)
+        matrice_emb = self.decomposer.fit_transform(matrice)
+        query_emb = self.decomposer.transform(query_vectorized)
         return matrice_emb, query_emb
 
     def search(
