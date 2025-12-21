@@ -45,7 +45,7 @@ class TextSearch:
         Returns:
             DataFrame containing the most relevant documents.
         """
-        indexes_relevant = np.argsort(score)[-n_results:]
+        indexes_relevant = np.argsort(score).tail(n_results)
         relevant_documents = self.indexer.records.iloc[indexes_relevant]
         return relevant_documents
 
