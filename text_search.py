@@ -45,7 +45,7 @@ class TextSearch:
         Returns:
             DataFrame containing the most relevant documents.
         """
-        indexes_relevant = np.argsort(score).tail(n_results)
+        indexes_relevant = np.argsort(score)[-n_results:]
         relevant_documents = self.indexer.records.iloc[indexes_relevant]
         return relevant_documents
 
@@ -66,6 +66,7 @@ class TextSearch:
         for field, value in filters.items():
             mask = (self.indexer.records[field] == value).astype(int)
             score = score * mask
+
         return score
 
     def _get_cosine_score(
@@ -89,7 +90,7 @@ class TextSearch:
                 self.indexer.vectorizers[field].transform([query])
             )
             matrice = self.indexer.matrices[field]
-            f_score = cosine_similarity(matrice, query_vectorized)
+            f_score = cosine_similarity(matrice, query_vectorized).flatten()
 
             field_boost = boost.get(field, 1.0)
 
@@ -117,7 +118,7 @@ class TextSearch:
         boost = boost or {}
         filters = filters or {}
 
-        score = np.zeros(len(self.df))
+        score = np.zeros(len(self.indexer.records))
         score = self._get_cosine_score(query, boost, score)
         score = self._apply_mask(filters, score)
         relevant_documents = self._get_relevant_documents(n_results, score)
