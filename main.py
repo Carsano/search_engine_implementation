@@ -10,6 +10,7 @@ from text_search import TextSearch
 from indexer import Indexer
 
 from sklearn.decomposition import TruncatedSVD, NMF
+import numpy as np
 
 DEFAULT_DOCS_URL = (
     "https://raw.githubusercontent.com/"
@@ -89,6 +90,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
     )
     return parser
+
+
+def _explain_n_topics(h_matrix, features_names, nb_topics=4, top_n=10):
+    for topic in enumerate(nb_topics):
+        _explain_topic_idx(h_matrix, features_names, topic)
+
+
+def _explain_topic_idx(h_matrix, feature_names, topic_idx, top_n=10):
+    topic = h_matrix[topic_idx]
+    top_indices = np.argsort(topic)[::-1][:top_n]
+    for i in top_indices:
+        print(f"{feature_names[i]:<20} {topic[i]:.3f}")
 
 
 def main() -> None:
