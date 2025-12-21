@@ -1849,6 +1849,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "jupyter" },
     { name = "lux" },
+    { name = "numpy" },
     { name = "pandas" },
     { name = "requests" },
     { name = "scikit-learn" },
@@ -1858,6 +1859,7 @@ dependencies = [
 requires-dist = [
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "lux", specifier = ">=0.5.1" },
+    { name = "numpy", specifier = ">=2.3.5" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
