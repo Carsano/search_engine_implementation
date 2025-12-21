@@ -7,11 +7,11 @@ TF-IDF vectorization and cosine similarity scoring.
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from scipy.sparse import spmatrix
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+from indexer import Indexer
 
 
 class TextSearch:
@@ -22,16 +22,14 @@ class TextSearch:
         matrices: Mapping of field name to TF-IDF matrix.
         vectorizers: Mapping of field name to fitted TF-IDF vectorizer.
     """
-    def __init__(self, text_fields: Sequence[str]) -> None:
+    def __init__(self, text_fields: Sequence[str], indexer: Indexer) -> None:
         """Initialize a TextSearch instance.
 
         Args:
             text_fields: Iterable of field names to index for text search.
         """
         self.text_fields = text_fields
-        self.matrices: Dict[str, spmatrix] = {}
-        self.vectorizers: Dict[str, TfidfVectorizer] = {}
-        self.df: pd.DataFrame = pd.DataFrame()
+        self.indexer = indexer
 
     def _get_relevant_documents(
         self,
@@ -48,7 +46,7 @@ class TextSearch:
             DataFrame containing the most relevant documents.
         """
         indexes_relevant = np.argsort(score).tail(n_results)
-        relevant_documents = self.df.iloc[indexes_relevant]
+        relevant_documents = self.indexer.records.iloc[indexes_relevant]
         return relevant_documents
 
     def _apply_mask(
@@ -66,7 +64,7 @@ class TextSearch:
             Updated score array after applying the filters.
         """
         for field, value in filters.items():
-            mask = (self.df[field] == value).astype(int)
+            mask = (self.indexer.records[field] == value).astype(int)
             score = score * mask
         return score
 
@@ -87,35 +85,16 @@ class TextSearch:
             Updated score array after adding per-field similarities.
         """
         for field in self.text_fields:
-            query_vectorized = self.vectorizers[field].transform([query])
-            matrice = self.matrices[field]
+            query_vectorized = (
+                self.indexer.vectorizers[field].transform([query])
+            )
+            matrice = self.indexer.matrices[field]
             f_score = cosine_similarity(matrice, query_vectorized)
 
             field_boost = boost.get(field, 1.0)
 
             score = score + field_boost * f_score
         return score
-
-    def fit(
-        self,
-        records: Iterable[Mapping[str, Any]],
-        vectorizer_params: Optional[Mapping[str, Any]] = None,
-    ) -> None:
-        """Fit TF-IDF vectorizers and matrices from records.
-
-        Args:
-            records: Iterable of record dicts to index.
-            vectorizer_params: Parameters passed to `TfidfVectorizer`.
-        """
-        self.df = pd.DataFrame(records)
-
-        vectorizer_params = vectorizer_params or {}
-
-        for field in self.text_fields:
-            vectorizer = TfidfVectorizer(**vectorizer_params)
-            matrice = vectorizer.fit_transform(self.df[field])
-            self.vectorizers[field] = vectorizer
-            self.matrices[field] = matrice
 
     def search(
         self,
