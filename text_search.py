@@ -4,9 +4,11 @@ This module provides a lightweight in-memory text search helper backed by
 TF-IDF vectorization and cosine similarity scoring.
 """
 
-import pandas as pd
 import numpy as np
-from typing import Array, Dict
+import pandas as pd
+from numpy.typing import NDArray
+from scipy.sparse import spmatrix
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -20,17 +22,22 @@ class TextSearch:
         matrices: Mapping of field name to TF-IDF matrix.
         vectorizers: Mapping of field name to fitted TF-IDF vectorizer.
     """
-    def __init__(self, text_fields: Array = []) -> None:
+    def __init__(self, text_fields: Sequence[str]) -> None:
         """Initialize a TextSearch instance.
 
         Args:
             text_fields: Iterable of field names to index for text search.
         """
         self.text_fields = text_fields
-        self.matrices: Dict = {}
-        self.vectorizers: Dict = {}
+        self.matrices: Dict[str, spmatrix] = {}
+        self.vectorizers: Dict[str, TfidfVectorizer] = {}
+        self.df: pd.DataFrame = pd.DataFrame()
 
-    def _get_relevant_documents(self, n_results, score):
+    def _get_relevant_documents(
+        self,
+        n_results: int,
+        score: NDArray[np.floating],
+    ) -> pd.DataFrame:
         """Return the top-N documents according to the score vector.
 
         Args:
@@ -44,7 +51,11 @@ class TextSearch:
         relevant_documents = self.df.iloc[indexes_relevant]
         return relevant_documents
 
-    def _apply_mask(self, filters, score):
+    def _apply_mask(
+        self,
+        filters: Mapping[str, Any],
+        score: NDArray[np.floating],
+    ) -> NDArray[np.floating]:
         """Apply exact-match filters to the score vector.
 
         Args:
@@ -59,7 +70,12 @@ class TextSearch:
             score = score * mask
         return score
 
-    def _get_cosine_score(self, query, boost, score):
+    def _get_cosine_score(
+        self,
+        query: str,
+        boost: Mapping[str, float],
+        score: NDArray[np.floating],
+    ) -> NDArray[np.floating]:
         """Compute cosine similarity scores for the query.
 
         Args:
@@ -75,12 +91,16 @@ class TextSearch:
             matrice = self.matrices[field]
             f_score = cosine_similarity(matrice, query_vectorized)
 
-            boost = boost.get(field, 1.0)
+            field_boost = boost.get(field, 1.0)
 
-            score = score + boost * f_score
+            score = score + field_boost * f_score
         return score
 
-    def fit(self, records, vectorizer_params: Dict = {}) -> None:
+    def fit(
+        self,
+        records: Iterable[Mapping[str, Any]],
+        vectorizer_params: Optional[Mapping[str, Any]] = None,
+    ) -> None:
         """Fit TF-IDF vectorizers and matrices from records.
 
         Args:
@@ -89,6 +109,8 @@ class TextSearch:
         """
         self.df = pd.DataFrame(records)
 
+        vectorizer_params = vectorizer_params or {}
+
         for field in self.text_fields:
             vectorizer = TfidfVectorizer(**vectorizer_params)
             matrice = vectorizer.fit_transform(self.df[field])
@@ -96,11 +118,12 @@ class TextSearch:
             self.matrices[field] = matrice
 
     def search(
-            self,
-            query: str,
-            boost: Dict = {},
-            filters: Dict = {},
-            n_results: int = 10):
+        self,
+        query: str,
+        boost: Optional[Mapping[str, float]] = None,
+        filters: Optional[Mapping[str, Any]] = None,
+        n_results: int = 10,
+    ) -> List[Dict[str, Any]]:
         """Search the indexed records.
 
         Args:
@@ -112,6 +135,9 @@ class TextSearch:
         Returns:
             List of matching records ordered by relevance.
         """
+        boost = boost or {}
+        filters = filters or {}
+
         score = np.zeros(len(self.df))
         score = self._get_cosine_score(query, boost, score)
         score = self._apply_mask(filters, score)
